@@ -1,0 +1,107 @@
+// hello_graph.axon
+// First AXON program -- demonstrates Node, Edge, Concept and zero-copy types.
+// Compile: axonc examples/hello_graph.axon -o hello_graph.axb
+// Run:     axon-runtime hello_graph.axb
+
+// -----------------------------------------------------------------------
+// 1. Module imports
+// -----------------------------------------------------------------------
+use stdlib::physics::constants;
+use stdlib::cognition::HypothesisSet;
+
+// -----------------------------------------------------------------------
+// 2. Node declarations
+//    These compile to fixed-size records in AXON shared memory.
+// -----------------------------------------------------------------------
+
+node Thermodinamica {
+    domain: Physics,
+    entropy_constant: f64 = 1.380649e-23,  // Boltzmann constant (J/K)
+    temperature_k:    f64 = 298.15,         // Room temperature
+    links: [Edge -> MaterialScience, Edge -> Fluidos]
+}
+
+node MaterialScience {
+    domain: MaterialScience,
+    youngs_modulus_gpa: f64 = 200.0,        // Steel reference
+    thermal_conductivity: f64 = 50.0,       // W/(m*K)
+    links: [Edge -> Thermodinamica]
+}
+
+node Fluidos {
+    domain: FluidDynamics,
+    viscosity_pas: f64 = 0.001,             // Water at 20 C
+    density_kg_m3: f64 = 998.2,
+    links: [Edge -> Thermodinamica]
+}
+
+// -----------------------------------------------------------------------
+// 3. Edges
+// -----------------------------------------------------------------------
+
+edge HeatToMaterial {
+    from: Thermodinamica,
+    to:   MaterialScience,
+    weight: 0.85,
+    bidirectional: false
+}
+
+edge HeatToFluid {
+    from: Thermodinamica,
+    to:   Fluidos,
+    weight: 0.72,
+    bidirectional: true
+}
+
+// -----------------------------------------------------------------------
+// 4. Concept -- causal relationship (input to the MDC engine)
+// -----------------------------------------------------------------------
+
+concept ThermalExpansion {
+    from: Thermodinamica,
+    to:   MaterialScience,
+    expansion_coefficient: f64 = 12.0e-6,  // 1/K, steel
+    delta_temperature_k:   f64 = 100.0,
+    predicted_strain:      f64 = 0.0       // computed at runtime
+}
+
+// -----------------------------------------------------------------------
+// 5. Zero-copy sensor type -- shared memory between AXON and APEX
+// -----------------------------------------------------------------------
+
+#[zero_copy]
+#[shared_memory_layout]
+node SensorSnapshot {
+    timestamp_ns:   u64,
+    temperature_k:  f32,
+    pressure_pa:    f32,
+    strain_um_m:    f32,
+    valid:          bool
+}
+
+// -----------------------------------------------------------------------
+// 6. Entry function
+// -----------------------------------------------------------------------
+
+fn main() -> u32 {
+    // Build a simple concept and pass to the MDC reasoning loop.
+    // In a real deployment, MDC runs as a separate service connected
+    // via the APEX shared-memory bus.
+
+    let snap: SensorSnapshot;
+    snap.timestamp_ns  = 0;  // filled by APEX at runtime
+    snap.temperature_k = 298.15;
+    snap.pressure_pa   = 101325.0;
+    snap.strain_um_m   = 0.0;
+    snap.valid         = true;
+
+    // Trigger diverge reasoning on the ThermalExpansion concept.
+    // The MDC spawns concurrent branches, validates in sandbox, prunes.
+    let results: HypothesisSet = diverge {
+        branch thermo: apply(Thermodinamica, ThermalExpansion),
+        branch fluid:  apply(Fluidos,        ThermalExpansion),
+        branch mat:    apply(MaterialScience, ThermalExpansion)
+    } -> validate_in_sandbox();
+
+    return 0;
+}
