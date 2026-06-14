@@ -1,0 +1,67 @@
+# axon-lang Rust Workspace
+# APSE Group -- Engineering Directorate
+
+[workspace]
+members = [
+    "runtime",
+    "compiler/codegen",
+    "bridge/enable",
+    "bridge/apex",
+    "bridge/hardware",
+    "tools/axon-fmt",
+    "tools/axon-lsp",
+    "tools/axon-viz",
+]
+resolver = "2"
+
+[workspace.package]
+version     = "0.1.0-pre.alpha"
+edition     = "2021"
+authors     = ["APSE Group Engineering Directorate"]
+license     = "LicenseRef-APSE-Proprietary"
+repository  = "https://github.com/phoenixc13/axon-lang"
+rust-version = "1.78"
+
+[workspace.dependencies]
+# Shared dependencies across all crates
+tokio       = { version = "1", features = ["full"] }
+serde       = { version = "1", features = ["derive"] }
+tracing     = "0.1"
+thiserror   = "1"
+anyhow      = "1"
+memmap2     = "0.9"    # shared memory mapping (zero-copy IPC)
+nix         = { version = "0.27", features = ["mman", "signal"] }
+
+[profile.release]
+opt-level       = 3
+lto             = true
+codegen-units   = 1
+panic           = "abort"   # no unwinding overhead in release
+strip           = true
+
+[profile.dev]
+opt-level = 1
+
+# -----------------------------------------------------------------------
+# Runtime crate
+# -----------------------------------------------------------------------
+# [package] for runtime is in runtime/Cargo.toml
+# Key responsibilities:
+#   - Shared memory segment manager (axon_shmem)
+#   - Deterministic task scheduler (axon_sched)
+#   - Zero-copy IPC bus (axon_ipc)
+#   - Sandbox microVM manager (axon_sandbox)
+
+# -----------------------------------------------------------------------
+# Bridge crates
+# -----------------------------------------------------------------------
+# bridge/enable  -- AXON <-> ENABLE Dynamic Tensor bridge
+# bridge/apex    -- AXON <-> APEX shared-memory message bus
+# bridge/hardware -- AXON <-> FPGA/PCB VHDL register map generator
+
+# -----------------------------------------------------------------------
+# Tool crates
+# -----------------------------------------------------------------------
+# tools/axon-fmt  -- Code formatter (similar to rustfmt)
+# tools/axon-lsp  -- Language Server Protocol server (VS Code / Neovim)
+# tools/axon-viz  -- Terminal graph visualizer
